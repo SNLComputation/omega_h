@@ -229,6 +229,8 @@ bob_link_dependency(omega_h PUBLIC SEACASExodus)
 
 bob_link_dependency(omega_h PUBLIC ZLIB)
 
+bob_link_dependency(omega_h PUBLIC MPI)
+
 if (Omega_h_USE_dwarf)
   target_include_directories(omega_h PRIVATE "${LIBDWARF_INCLUDE_DIRS}")
   target_link_libraries(omega_h PUBLIC "${LIBDWARF_LIBRARIES}")

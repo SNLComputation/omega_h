@@ -81,6 +81,12 @@ if (Kokkos_HAS_CUDA AND (NOT Kokkos_HAS_CUDA_LAMBDA))
 endif()
 
 bob_option(Omega_h_USE_MPI "Use MPI for parallelism" OFF)
+if(Omega_h_USE_MPI)
+  set(MPI_CXX_SKIP_MPICXX ON) #don't need MPI C++ bindings
+  bob_add_dependency(PUBLIC NAME MPI
+    INCLUDE_DIR_VARS MPI_CXX_INCLUDE_DIRS
+    LIBRARY_VARS MPI_CXX_LIBRARIES)
+endif()
 bob_option(Omega_h_USE_OpenMP "Whether to use OpenMP" "${Kokkos_HAS_OpenMP}")
 bob_option(Omega_h_USE_CUDA "Whether to use CUDA" "${Kokkos_HAS_CUDA}")
 
