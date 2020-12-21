@@ -12,6 +12,10 @@ endif()
 include(cmake/bob.cmake)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
+set(CMAKE_MODULE_PATH
+  ${CMAKE_MODULE_PATH}
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+
 bob_begin_package()
 
 bob_option(Omega_h_CHECK_BOUNDS "Check array bounds (makes code slow too)" OFF)
@@ -22,6 +26,7 @@ bob_input(EGADS_PREFIX "" PATH "EGADS (or ESP) installation directory")
 bob_option(Omega_h_USE_Kokkos "Use Kokkos as a backend" OFF)
 bob_input(Kokkos_PREFIX "" PATH "Path to Kokkos install")
 bob_option(Omega_h_USE_CUDA_AWARE_MPI "Assume MPI is CUDA-aware, make use of that" OFF)
+bob_option(Omega_h_USE_SimModSuite "Enable reading Simmetrix MeshSim meshes" OFF)
 bob_input(Omega_h_VALGRIND "" STRING "Valgrind plus arguments for testing")
 bob_option(Omega_h_EXAMPLES "Compile examples" OFF)
 
@@ -29,7 +34,7 @@ set(Omega_h_USE_ZLIB_DEFAULT ON)
 bob_add_dependency(PUBLIC NAME ZLIB TARGETS ZLIB::ZLIB)
 
 set(Omega_h_USE_Kokkos_DEFAULT OFF)
-set(KokkosCore_PREFIX_DEFAULT ${Kokkos_PREFIX})
+set(Kokkos_PREFIX_DEFAULT ${Kokkos_PREFIX})
 bob_add_dependency(PUBLIC NAME Kokkos TARGETS kokkos INCLUDE_DIR_VARS Kokkos_INCLUDE_DIRS)
 if (Omega_h_USE_Kokkos)
   set_target_properties(kokkos PROPERTIES INTERFACE_COMPILE_OPTIONS "")
@@ -100,6 +105,7 @@ set(Omega_h_KEY_BOOLS
     Omega_h_USE_libMeshb
     Omega_h_USE_EGADS
     Omega_h_USE_SEACASExodus
+    Omega_h_USE_SimModSuite
     Omega_h_USE_DOLFIN
     Omega_h_USE_dwarf
     Omega_h_CHECK_BOUNDS

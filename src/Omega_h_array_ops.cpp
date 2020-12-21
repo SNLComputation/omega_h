@@ -137,6 +137,20 @@ Write<T> divide_each(Read<T> a, Read<T> b, std::string const& name) {
   return c;
 }
 
+template <typename T>
+Write<T> concat(Read<T> a, Read<T> b, std::string const& name) {
+  Write<T> c(a.size() + b.size(), name);
+  auto add_a = OMEGA_H_LAMBDA(LO i) {
+    c[i] = a[i];
+  };
+  parallel_for(a.size(), add_a, "add_a");
+  auto add_b = OMEGA_H_LAMBDA(LO i) {
+    c[i+a.size()] = b[i];
+  };
+  parallel_for(b.size(), add_b, "add_b");
+  return c;
+}
+
 Reals divide_each_maybe_zero(Reals a, Reals b) {
   if (b.size() == 0) {
     OMEGA_H_CHECK(a.size() == 0);
@@ -582,6 +596,7 @@ Read<Tout> array_cast(Read<Tin> in) {
   template Read<T> multiply_each_by(Read<T> a, T b);                           \
   template Read<T> divide_each_by(Read<T> x, T b);                             \
   template Write<T> divide_each(Read<T> a, Read<T> b, std::string const&);     \
+  template Write<T> concat(Read<T> a, Read<T> b, std::string const&);     \
   template Read<T> add_each(Read<T> a, Read<T> b, std::string const&);         \
   template Read<T> subtract_each(Read<T> a, Read<T> b);                        \
   template Read<T> min_each(Read<T> a, Read<T> b);                             \

@@ -37,8 +37,14 @@ struct Children : public Graph {
 void find_matches(Omega_h_Family const family, Int const dim, LOs const av2v,
     LOs const bv2v, Adj const v2b, Write<LO>* a2b_out, Write<I8>* codes_out);
 
+void find_matches(Topo_type const ent_type, LOs const av2v,
+    LOs const bv2v, Adj const v2b, Write<LO>* a2b_out, Write<I8>* codes_out);
+
 Adj reflect_down(LOs const hv2v, LOs const lv2v, Adj const v2l,
     Omega_h_Family const family, Int const high_dim, Int const low_dim);
+
+Adj reflect_down(LOs const hv2v, LOs const lv2v, Adj const v2l,
+    Topo_type const high_type, Topo_type const low_type);
 
 Adj unmap_adjacency(LOs const a2b, Adj const b2c);
 
@@ -47,6 +53,9 @@ Adj unmap_adjacency(LOs const a2b, Adj const b2c);
    index of the upward adjacent entity */
 Adj invert_adj(Adj const down, Int const nlows_per_high, LO const nlows,
     Int const high_dim, Int const low_dim);
+
+Adj invert_adj(Adj const down, Int const nlows_per_high, LO const nlows,
+    Topo_type high_type, Topo_type low_type);
 
 Children invert_parents(Parents const children2parents, Int const parent_dim,
     Int const nparent_dim_ents);
@@ -57,8 +66,17 @@ Children invert_parents(Parents const children2parents, Int const parent_dim,
 LOs form_uses(LOs const hv2v, Omega_h_Family const family, Int const high_dim,
     Int const low_dim);
 
+LOs form_uses(LOs const hv2v, Topo_type const high_type, Topo_type const low_type);
+
 LOs find_unique(LOs const hv2v, Omega_h_Family const family, Int const high_dim,
     Int const low_dim);
+
+/* find_unique if not used for mixed till now because
+    multiple down adjs from and below face2edge will be created.
+    If found a way to efficiently combine these, build from elems2verts
+    can be written
+*/
+LOs find_unique(LOs const hv2v, Topo_type const high_type, Topo_type const low_type);
 
 /* for each entity (or entity use), sort its vertex list
    and express the sorting transformation as an alignment code */
@@ -91,6 +109,9 @@ Adj reflect_down(LOs const hv2v, LOs const lv2v, Omega_h_Family const family,
 
 Adj transit(Adj const h2m, Adj const m2l, Omega_h_Family const family,
     Int const high_dim, Int const low_dim);
+
+Adj transit(Adj const h2m, Adj const m2l, Topo_type const high_type,
+    Topo_type const low_type, Topo_type const mid_type);
 
 Graph verts_across_edges(Adj const e2v, Adj const v2e);
 Graph edges_across_tris(Adj const f2e, Adj const e2f);

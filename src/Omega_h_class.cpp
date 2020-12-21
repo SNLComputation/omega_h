@@ -190,4 +190,32 @@ void classify_equal_order(
   mesh->add_tag<ClassId>(ent_dim, "class_id", 1, class_id);
 }
 
+/* TODO this function is included as work in progress and is not tested */
+void classify_equal_order(
+    Mesh* mesh, Topo_type ent_type, LOs eqv2v, Read<ClassId> eq_class_ids) {
+  LOs eq2e;
+  if (ent_type == Topo_type::vertex) {
+    eq2e = eqv2v;
+  } 
+  else {
+    Write<LO> eq2e_w;
+    Write<I8> codes;
+    auto ev2v = mesh->ask_verts_of(ent_type);
+    auto v2e = mesh->ask_up(Topo_type::vertex, ent_type);
+    find_matches(ent_type, eqv2v, ev2v, v2e, &eq2e_w, &codes);
+    eq2e = eq2e_w;
+  }
+
+  auto ent_dim = mesh->ent_dim(ent_type);
+
+  auto neq = eqv2v.size() / (ent_dim + 1);
+  auto eq_class_dim = Read<I8>(neq, I8(ent_dim));
+  auto class_dim =
+      map_onto(eq_class_dim, eq2e, mesh->nents(ent_type), I8(mesh->dim()), 1);
+  auto class_id = map_onto(eq_class_ids, eq2e, mesh->nents(ent_type), -1, 1);
+  mesh->add_tag<I8>(ent_type, "class_dim", 1, class_dim);
+  mesh->add_tag<ClassId>(ent_type, "class_id", 1, class_id);
+}
+/* */
+
 }  // end namespace Omega_h

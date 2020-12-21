@@ -152,6 +152,17 @@ LOs find_unique(LOs const hv2v, Omega_h_Family const family, Int const high_dim,
   return find_unique_deg(deg, uv2v);
 }
 
+LOs find_unique(LOs const hv2v, Topo_type const high_type, Topo_type
+    const low_type) {
+  OMEGA_H_TIME_FUNCTION;
+  OMEGA_H_CHECK(int(high_type) > int(low_type));
+  OMEGA_H_CHECK(int(low_type) <= 3);
+  OMEGA_H_CHECK(hv2v.size() % element_degree(high_type, Topo_type::vertex) == 0);
+  auto const uv2v = form_uses(hv2v, high_type, low_type);
+  auto const deg = element_degree(low_type, Topo_type::vertex);
+  return find_unique_deg(deg, uv2v);
+}
+
 LOs form_uses(LOs const hv2v, Omega_h_Family const family, Int const high_dim,
     Int const low_dim) {
   OMEGA_H_TIME_FUNCTION;
@@ -168,6 +179,29 @@ LOs form_uses(LOs const hv2v, Omega_h_Family const family, Int const high_dim,
       for (Int uv = 0; uv < nverts_per_low; ++uv) {
         uv2v[u_begin + uv] = hv2v[h_begin + element_down_template(family,
                                                 high_dim, low_dim, u, uv)];
+      }
+    }
+  };
+  parallel_for(nhigh, std::move(f));
+  return uv2v;
+}
+
+LOs form_uses(LOs const hv2v, Topo_type const high_type,
+              Topo_type const low_type) {
+  OMEGA_H_TIME_FUNCTION;
+  Int const nverts_per_high = element_degree(high_type, Topo_type::vertex);
+  Int const nverts_per_low = element_degree(low_type, Topo_type::vertex);
+  Int const nlows_per_high = element_degree(high_type, low_type);
+  LO const nhigh = divide_no_remainder(hv2v.size(), nverts_per_high);
+  LO const nuses = nhigh * nlows_per_high;
+  Write<LO> uv2v(nuses * nverts_per_low);
+  auto f = OMEGA_H_LAMBDA(LO h) {
+    LO const h_begin = h * nverts_per_high;
+    for (Int u = 0; u < nlows_per_high; ++u) {
+      LO const u_begin = (h * nlows_per_high + u) * nverts_per_low;
+      for (Int uv = 0; uv < nverts_per_low; ++uv) {
+        uv2v[u_begin + uv] = hv2v[h_begin + element_down_template(
+                             int(high_type), int(low_type), u, uv)];
       }
     }
   };
@@ -226,6 +260,40 @@ void separate_upward_no_codes(LO const nlh, LOs const lh2hl,
     codes[lh] = make_code(false, 0, which_down);
   };
   parallel_for(nlh, std::move(f));
+}
+
+Adj invert_adj(Adj const down, Int const nlows_per_high, LO const nlows,
+    Topo_type high_type, Topo_type low_type) {
+  OMEGA_H_TIME_FUNCTION;
+  auto const high_plural_name = dimensional_plural_name(high_type);//change code
+  auto const high_singular_name = dimensional_singular_name(high_type);//change code
+  auto const low_plural_name = dimensional_plural_name(low_type);
+  auto const low_singular_name = dimensional_singular_name(low_type);
+  auto const l2lh_name = std::string(low_plural_name) + " to " +
+                         low_singular_name + " " + high_plural_name;
+  auto const lh2hl_name = std::string(low_singular_name) + " " +
+                          high_plural_name + " to " + high_singular_name + " " +
+                          low_plural_name;
+  auto const lh2h_name = std::string(low_singular_name) + " " +
+                         high_plural_name + " to " + high_plural_name;
+  auto const codes_name =
+      std::string(low_singular_name) + " " + high_plural_name + " codes";
+  auto const l2hl =
+      invert_map_by_atomics(down.ab2b, nlows, l2lh_name, lh2hl_name);
+  auto const l2lh = l2hl.a2ab;
+  auto const lh2hl = l2hl.ab2b;
+  LO const nlh = lh2hl.size();
+  Read<I8> down_codes(down.codes);
+  Write<LO> lh2h(nlh, lh2h_name);
+  Write<I8> codes(nlh, codes_name);
+  if (down_codes.exists()) {
+    separate_upward_with_codes(
+        nlh, lh2hl, nlows_per_high, lh2h, down_codes, codes);
+  } else {
+    separate_upward_no_codes(nlh, lh2hl, nlows_per_high, lh2h, codes);
+  }
+  sort_by_high_index(l2lh, lh2h, codes);
+  return Adj(l2lh, lh2h, codes);
 }
 
 Adj invert_adj(Adj const down, Int const nlows_per_high, LO const nlows,
@@ -380,7 +448,7 @@ void find_matches_deg(LOs const a2fv, Read<T> const av2v,
       I8 match_code;
       if (IsMatch<deg>::eval(
               av2v, a_begin, bv2v, b_begin, which_down, &match_code)) {
-        OMEGA_H_CHECK(!found);  // there can't be more than one!
+        OMEGA_H_CHECK(!found); // there can't be more than one!
         a2b[a] = b;
         codes[a] = match_code;
         found = true;
@@ -421,6 +489,14 @@ void find_matches(Omega_h_Family const family, Int const dim, LOs const av2v,
   find_matches_ex(deg, a2fv, av2v, bv2v, v2b, a2b_out, codes_out);
 }
 
+void find_matches(Topo_type const ent_type, LOs const av2v,
+    LOs const bv2v, Adj const v2b, Write<LO>* a2b_out, Write<I8>* codes_out) {
+  OMEGA_H_CHECK(int(ent_type) <= 3);
+  auto const deg = element_degree(ent_type, Topo_type::vertex);
+  auto const a2fv = get_component(av2v, deg, 0);
+  find_matches_ex(deg, a2fv, av2v, bv2v, v2b, a2b_out, codes_out);
+}
+
 Adj reflect_down(LOs const hv2v, LOs const lv2v, Adj const v2l,
     Omega_h_Family const family, Int const high_dim, Int const low_dim) {
   ScopedTimer timer("reflect_down(v2l)");
@@ -428,6 +504,16 @@ Adj reflect_down(LOs const hv2v, LOs const lv2v, Adj const v2l,
   Write<LO> hl2l;
   Write<I8> codes;
   find_matches(family, low_dim, uv2v, lv2v, v2l, &hl2l, &codes);
+  return Adj(read(hl2l), read(codes));
+}
+
+Adj reflect_down(LOs const hv2v, LOs const lv2v, Adj const v2l,
+    Topo_type const high_type, Topo_type const low_type) {
+  ScopedTimer timer("reflect_down_mix(v2l)");
+  LOs const uv2v = form_uses(hv2v, high_type, low_type);
+  Write<LO> hl2l;
+  Write<I8> codes;
+  find_matches(low_type, uv2v, lv2v, v2l, &hl2l, &codes);
   return Adj(read(hl2l), read(codes));
 }
 
@@ -527,6 +613,65 @@ Graph verts_across_edges(Adj const e2v, Adj const v2e) {
   };
   parallel_for(vv2v.size(), std::move(f));
   return Adj(v2vv, vv2v);
+}
+
+Adj transit(Adj const h2m, Adj const m2l, 
+    Topo_type const high_type, Topo_type const low_type, Topo_type const mid_type) {
+  OMEGA_H_TIME_FUNCTION;
+  auto const high_singular_name = dimensional_singular_name(high_type);
+  auto const low_plural_name = dimensional_plural_name(low_type);
+  auto const hl2l_name = std::string(high_singular_name) + " " +
+                         low_plural_name + " to " + low_plural_name;
+  OMEGA_H_CHECK(7 >= int(high_type));
+  OMEGA_H_CHECK(int(high_type) > int(mid_type));
+  OMEGA_H_CHECK(int(low_type) == 1 || int(low_type) == 0);
+  auto const hm2m = h2m.ab2b;
+  auto const m2hm_codes = h2m.codes;
+  auto const ml2l = m2l.ab2b;
+  auto const ml_codes = m2l.codes;
+  auto const nmids_per_high = element_degree(high_type, mid_type);
+  auto const nlows_per_mid = element_degree(mid_type, low_type);
+  auto const nlows_per_high = element_degree(high_type, low_type);
+  auto const nhighs = divide_no_remainder(hm2m.size(), nmids_per_high);
+  Write<LO> hl2l(nhighs * nlows_per_high, hl2l_name);
+  Write<I8> codes;
+  if (int(low_type) == 1) {
+    auto const codes_name =
+        std::string(high_singular_name) + " " + low_plural_name + " codes";
+    codes = Write<I8>(hl2l.size(), codes_name);
+  }
+  auto f = OMEGA_H_LAMBDA(LO h) {
+    auto const hl_begin = h * nlows_per_high;
+    auto const hm_begin = h * nmids_per_high;
+    for (Int hl = 0; hl < nlows_per_high; ++hl) {
+      auto const ut = element_up_template(int(high_type), int(low_type), hl, 0);//add wedge and pyramid templates
+      auto const hm = ut.up;
+      auto const hml = ut.which_down;
+      auto const m = hm2m[hm_begin + hm];
+      auto const m2hm_code = m2hm_codes[hm_begin + hm];
+      auto const hm2m_code = invert_alignment(nlows_per_mid, m2hm_code);
+      auto const ml = align_index(nlows_per_mid, int(low_type), hml, hm2m_code);
+      auto const ml_begin = m * nlows_per_mid;
+      auto const l = ml2l[ml_begin + ml];
+      for (Int hhl2 = 0; hhl2 < hl; ++hhl2) {
+        OMEGA_H_CHECK(l != hl2l[hl_begin + hhl2]);
+      }
+      hl2l[hl_begin + hl] = l;
+      if (int(low_type) == 1) {
+        auto const region_face_code = hm2m_code;
+        auto const face_edge_code = ml_codes[ml_begin + ml];
+        auto const region_face_flipped = code_is_flipped(region_face_code);
+        auto const face_edge_flipped = bool(code_rotation(face_edge_code) == 1);
+        auto const canon_flipped = ut.is_flipped;
+        bool const region_edge_flipped =
+            region_face_flipped ^ face_edge_flipped ^ canon_flipped;
+        codes[hl_begin + hl] = make_code(false, region_edge_flipped, 0);
+      }
+    }
+  };
+  parallel_for(nhighs, std::move(f));
+  if (int(low_type) == 1) return Adj(hl2l, codes);
+  return Adj(hl2l);
 }
 
 Graph edges_across_tris(Adj const f2e, Adj const e2f) {
