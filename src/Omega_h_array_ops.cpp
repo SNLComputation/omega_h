@@ -4,6 +4,7 @@
 #include "Omega_h_functors.hpp"
 #include "Omega_h_int_iterator.hpp"
 #include "Omega_h_reduce.hpp"
+#include "Omega_h_dbg.hpp"
 
 namespace Omega_h {
 
@@ -493,6 +494,9 @@ Read<T> coalesce(std::vector<Read<T>> arrays) {
 */
 
 int max_exponent(Reals a) {
+  if (a.size() == 0) {
+    return 0;
+  }
   auto const first = IntIterator(0);
   auto const last = IntIterator(a.size());
   auto const init = ArithTraits<int>::min();
@@ -510,6 +514,9 @@ struct Int128Plus {
 };
 
 Int128 int128_sum(Reals const a, double const unit) {
+  if (a.size() == 0) {
+    return Int128(0);
+  }
   auto const first = IntIterator(0);
   auto const last = IntIterator(a.size());
   auto const init = Int128(0);
@@ -521,6 +528,9 @@ Int128 int128_sum(Reals const a, double const unit) {
 }
 
 Real repro_sum(Reals a) {
+  if (a.size() == 0) {
+    return 0.0;
+  }
   begin_code("repro_sum");
   int expo = max_exponent(a);
   double unit = exp2(double(expo - MANTISSA_BITS));

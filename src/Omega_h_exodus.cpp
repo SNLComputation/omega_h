@@ -24,6 +24,7 @@
 #include "Omega_h_map.hpp"
 #include "Omega_h_mark.hpp"
 #include "Omega_h_mesh.hpp"
+#include "Omega_h_dbg.hpp"
 
 namespace Omega_h {
 
@@ -164,7 +165,7 @@ void read_nodal_fields(int exodus_file, Mesh* mesh, int time_step,
     std::string const& prefix, std::string const& postfix, bool verbose) {
   int num_nodal_vars;
   CALL(ex_get_variable_param(exodus_file, EX_NODAL, &num_nodal_vars));
-  if (verbose) std::cout << num_nodal_vars << " nodal variables\n";
+  if (verbose) std::cout << "P" << mesh->comm()->rank() << ": " << num_nodal_vars << " nodal variables\n";
   if (num_nodal_vars == 0) return;
   std::vector<char> names_memory;
   std::vector<char*> name_ptrs;
@@ -174,7 +175,7 @@ void read_nodal_fields(int exodus_file, Mesh* mesh, int time_step,
   for (int i = 0; i < num_nodal_vars; ++i) {
     auto name = name_ptrs[std::size_t(i)];
     if (verbose)
-      std::cout << "Loading nodal variable \"" << name << "\" at time step "
+      std::cout << "P" << mesh->comm()->rank() << ": Loading nodal variable \"" << name << "\" at time step "
                 << time_step << '\n';
     auto name_osh = prefix + std::string(name) + postfix;
     HostWrite<double> host_write(mesh->nverts(), name_osh);
@@ -191,15 +192,17 @@ void read_mesh(int file, Mesh* mesh, bool verbose, int classify_with) {
   ex_init_params init_params;
   CALL(ex_get_init_ext(file, &init_params));
   if (verbose) {
-    std::cout << "init params:\n";
-    std::cout << " Exodus ID " << file << '\n';
-    std::cout << " Title " << init_params.title << '\n';
-    std::cout << " num_dim " << init_params.num_dim << '\n';
-    std::cout << " num_nodes " << init_params.num_nodes << '\n';
-    std::cout << " num_elem " << init_params.num_elem << '\n';
-    std::cout << " num_elem_blk " << init_params.num_elem_blk << '\n';
-    std::cout << " num_node_sets " << init_params.num_node_sets << '\n';
-    std::cout << " num_side_sets " << init_params.num_side_sets << '\n';
+    std::ostringstream oss;
+    oss << "init params:\n";
+    oss << " Exodus ID " << file << '\n';
+    oss << " Title " << init_params.title << '\n';
+    oss << " num_dim " << init_params.num_dim << '\n';
+    oss << " num_nodes " << init_params.num_nodes << '\n';
+    oss << " num_elem " << init_params.num_elem << '\n';
+    oss << " num_elem_blk " << init_params.num_elem_blk << '\n';
+    oss << " num_node_sets " << init_params.num_node_sets << '\n';
+    oss << " num_side_sets " << init_params.num_side_sets << '\n';
+    std::cout << oss.str() << std::endl;
   }
   std::vector<int> block_ids(std::size_t(init_params.num_elem_blk));
   CALL(ex_get_ids(file, EX_ELEM_BLOCK, block_ids.data()));
@@ -223,9 +226,9 @@ void read_mesh(int file, Mesh* mesh, bool verbose, int classify_with) {
         &nnodes_per_entry, &nedges_per_entry, &nfaces_per_entry,
         &nattr_per_entry));
     if (verbose) {
-      std::cout << "block " << block_ids[i] << " \"" << block_names[i] << "\""
+      std::cout << "P" << mesh->comm()->rank() << ": block " << block_ids[i] << " \"" << block_names[i] << "\""
                 << " has " << nentries << " elements of type " << elem_type
-                << '\n';
+                << std::endl;
     }
     /* some pretty weird blocks from the CDFEM people... */
     if (std::string("NULL") == elem_type && nentries == 0) continue;
@@ -233,11 +236,11 @@ void read_mesh(int file, Mesh* mesh, bool verbose, int classify_with) {
     Omega_h_Family family_from_type;
     get_elem_type_info(elem_type, &dim_from_type, &family_from_type);
     if (family_int == -1) family_int = family_from_type;
-    OMEGA_H_CHECK(family_int == family_from_type);
+    OMEGA_H_CHECK_OP(family_int, ==, family_from_type);
     if (dim == -1) dim = dim_from_type;
-    OMEGA_H_CHECK(dim == dim_from_type);
+    OMEGA_H_CHECK_OP(dim, ==, dim_from_type);
     auto deg = element_degree(Omega_h_Family(family_int), dim, VERT);
-    OMEGA_H_CHECK(nnodes_per_entry == deg);
+    OMEGA_H_CHECK_OP(nnodes_per_entry, ==, deg);
     if (!h_conn.exists())
       h_conn =
           decltype(h_conn)(LO(init_params.num_elem * deg), "host connectivity");
@@ -256,7 +259,7 @@ void read_mesh(int file, Mesh* mesh, bool verbose, int classify_with) {
     mesh->class_sets[block_names[i]].push_back({I8(dim), region_id});
     elem_start += nentries;
   }
-  OMEGA_H_CHECK(elem_start == init_params.num_elem);
+  OMEGA_H_CHECK_OP(elem_start, ==, init_params.num_elem);
   Omega_h_Family family = Omega_h_Family(family_int);
   auto conn = subtract_from_each(LOs(h_conn.write()), 1);
   HostWrite<Real> h_coord_blk[3];
@@ -300,8 +303,8 @@ void read_mesh(int file, Mesh* mesh, bool verbose, int classify_with) {
       CALL(ex_get_set_param(
           file, EX_NODE_SET, node_set_ids[i], &nentries, &ndist_factors));
       if (verbose) {
-        std::cout << "node set " << node_set_ids[i] << " has " << nentries
-                  << " nodes\n";
+        std::cout << "P" << mesh->comm()->rank() << ": node set " << node_set_ids[i] << " has " << nentries
+                  << " nodes" << std::endl;
       }
       HostWrite<LO> h_set_nodes2nodes(nentries);
       CALL(ex_get_set(file, EX_NODE_SET, node_set_ids[i],
@@ -314,8 +317,8 @@ void read_mesh(int file, Mesh* mesh, bool verbose, int classify_with) {
       auto set_sides2side = collect_marked(sides_are_in_set);
       auto surface_id = node_set_ids[i] + max_side_set_id;
       if (verbose) {
-        std::cout << "node set #" << node_set_ids[i] << " \"" << name_ptrs[i]
-                  << "\" will be surface " << surface_id << '\n';
+        std::cout << "P" << mesh->comm()->rank() << ": node set #" << node_set_ids[i] << " \"" << name_ptrs[i]
+                  << "\" will be surface " << surface_id << std::endl;
       }
       map_value_into(surface_id, set_sides2side, side_class_ids_w);
       map_value_into(I8(dim - 1), set_sides2side, side_class_dims_w);
@@ -332,9 +335,9 @@ void read_mesh(int file, Mesh* mesh, bool verbose, int classify_with) {
       CALL(ex_get_set_param(
           file, EX_SIDE_SET, side_set_ids[i], &nentries, &ndist_factors));
       if (verbose) {
-        std::cout << "side set #" << side_set_ids[i] << " \"" << name_ptrs[i]
+        std::cout << "P" << mesh->comm()->rank() << ": side set #" << side_set_ids[i] << " \"" << name_ptrs[i]
                   << "\" has " << nentries << " sides, will be surface "
-                  << side_set_ids[i] << "\n";
+                  << side_set_ids[i] << std::endl;
       }
       HostWrite<LO> h_set_sides2elem(nentries);
       HostWrite<LO> h_set_sides2local(nentries);
@@ -377,14 +380,14 @@ static void read_sliced_nodal_fields(Mesh* mesh, int file, int time_step,
     bool verbose, Dist slice_verts2verts, GO nodes_begin, LO nslice_nodes) {
   int num_nodal_vars;
   CALL(ex_get_variable_param(file, EX_NODAL, &num_nodal_vars));
-  if (verbose) std::cout << num_nodal_vars << " nodal variables\n";
+  if (verbose) std::cout << "P" << mesh->comm()->rank() << ": " << num_nodal_vars << " nodal variables\n";
   std::vector<char> names_memory;
   std::vector<char*> name_ptrs;
   setup_names(num_nodal_vars, names_memory, name_ptrs);
   CALL(ex_get_variable_names(file, EX_NODAL, num_nodal_vars, name_ptrs.data()));
   for (int i = 0; i < num_nodal_vars; ++i) {
     auto name = name_ptrs[std::size_t(i)];
-    if (verbose) std::cout << "Loading nodal variable \"" << name << "\"\n";
+    if (verbose) std::cout << "P" << mesh->comm()->rank() << ": Loading nodal variable \"" << name << "\"\n";
     HostWrite<double> host_write(nslice_nodes);
     CALL(ex_get_partial_var(file, time_step + 1, EX_NODAL, i + 1, /*obj_id*/ 0,
         nodes_begin + 1, nslice_nodes, host_write.data()));
@@ -411,18 +414,20 @@ Mesh read_sliced(filesystem::path const& path, CommPtr comm, bool verbose, int,
   ex_init_params init_params;
   CALL(ex_get_init_ext(file, &init_params));
   if (verbose) {
-    std::cout << "init params for " << path << ":\n";
-    std::cout << " ExodusII " << version << '\n';
-    std::cout << " Exodus ID " << file << '\n';
-    std::cout << " comp_ws " << comp_ws << '\n';
-    std::cout << " io_ws " << io_ws << '\n';
-    std::cout << " Title " << init_params.title << '\n';
-    std::cout << " num_dim " << init_params.num_dim << '\n';
-    std::cout << " num_nodes " << init_params.num_nodes << '\n';
-    std::cout << " num_elem " << init_params.num_elem << '\n';
-    std::cout << " num_elem_blk " << init_params.num_elem_blk << '\n';
-    std::cout << " num_node_sets " << init_params.num_node_sets << '\n';
-    std::cout << " num_side_sets " << init_params.num_side_sets << '\n';
+    std::ostringstream oss;
+    oss << "P" << comm->rank() << ": init params for " << path << ":\n";
+    oss << " ExodusII " << version << '\n';
+    oss << " Exodus ID " << file << '\n';
+    oss << " comp_ws " << comp_ws << '\n';
+    oss << " io_ws " << io_ws << '\n';
+    oss << " Title " << init_params.title << '\n';
+    oss << " num_dim " << init_params.num_dim << '\n';
+    oss << " num_nodes " << init_params.num_nodes << '\n';
+    oss << " num_elem " << init_params.num_elem << '\n';
+    oss << " num_elem_blk " << init_params.num_elem_blk << '\n';
+    oss << " num_node_sets " << init_params.num_node_sets << '\n';
+    oss << " num_side_sets " << init_params.num_side_sets;
+    std::cout << oss.str() << std::endl;
   }
   auto dim = int(init_params.num_dim);
   GO nodes_begin, nodes_end;
@@ -465,7 +470,7 @@ Mesh read_sliced(filesystem::path const& path, CommPtr comm, bool verbose, int,
         &nnodes_per_entry, &nedges_per_entry, &nfaces_per_entry,
         &nattr_per_entry));
     if (verbose) {
-      std::cout << "block " << block_ids[i] << " has " << nentries
+      std::cout << "P" << comm->rank() << ": block " << block_ids[i] << " has " << nentries
                 << " elements of type " << elem_type << '\n';
     }
     /* some pretty weird blocks from the CDFEM people... */
@@ -473,11 +478,11 @@ Mesh read_sliced(filesystem::path const& path, CommPtr comm, bool verbose, int,
     int dim_from_type;
     Omega_h_Family family_from_type;
     get_elem_type_info(elem_type, &dim_from_type, &family_from_type);
-    OMEGA_H_CHECK(dim_from_type == dim);
+    OMEGA_H_CHECK_OP(dim_from_type, ==, dim);
     if (family_int == -1) family_int = family_from_type;
-    OMEGA_H_CHECK(family_int == family_from_type);
+    OMEGA_H_CHECK_OP(family_int, ==, family_from_type);
     auto deg = element_degree(Omega_h_Family(family_int), dim, VERT);
-    OMEGA_H_CHECK(nnodes_per_entry == deg);
+    OMEGA_H_CHECK_OP(nnodes_per_entry, ==, deg);
     if (!h_conn.exists())
       h_conn = decltype(h_conn)(nslice_elems * deg, "host connectivity");
     if (nedges_per_entry < 0) nedges_per_entry = 0;
@@ -500,8 +505,8 @@ Mesh read_sliced(filesystem::path const& path, CommPtr comm, bool verbose, int,
     total_elem_offset += nentries;
     slice_elem_offset += nfrom_block;
   }
-  OMEGA_H_CHECK(total_elem_offset == init_params.num_elem);
-  OMEGA_H_CHECK(slice_elem_offset == nslice_elems);
+  OMEGA_H_CHECK_OP(total_elem_offset, ==, init_params.num_elem);
+  OMEGA_H_CHECK_OP(slice_elem_offset, ==, nslice_elems);
   Omega_h_Family family = Omega_h_Family(family_int);
   auto slice_conn = subtract_from_each(GOs(h_conn.write()), GO(1));
 
@@ -527,10 +532,10 @@ Mesh read_sliced(filesystem::path const& path, CommPtr comm, bool verbose, int,
   classify_sides_by_exposure(&mesh, sides_are_exposed);
 
   auto num_time_steps = int(ex_inquire_int(file, EX_INQ_TIME));
-  if (verbose) std::cout << num_time_steps << " time steps\n";
+  if (verbose) std::cout << "P" << comm->rank() << ": " << num_time_steps << " time steps\n";
   if (num_time_steps > 0) {
     if (time_step < 0) time_step = num_time_steps - 1;
-    if (verbose) std::cout << "reading time step " << time_step << '\n';
+    if (verbose) std::cout << "P" << comm->rank() << ": reading time step " << time_step << std::endl;
     read_sliced_nodal_fields(&mesh, file, time_step, verbose, slice_verts2verts,
         nodes_begin, nslice_nodes);
   }
@@ -577,17 +582,19 @@ void write(
   auto nnode_sets =
       (classify_with & exodus::NODE_SETS) ? int(surface_set.size()) : 0;
   if (verbose) {
-    std::cout << "init params for " << path << ":\n";
-    std::cout << " Exodus ID " << file << '\n';
-    std::cout << " comp_ws " << comp_ws << '\n';
-    std::cout << " io_ws " << io_ws << '\n';
-    std::cout << " Title " << title << '\n';
-    std::cout << " num_dim " << dim << '\n';
-    std::cout << " num_nodes " << mesh->nverts() << '\n';
-    std::cout << " num_elem " << mesh->nelems() << '\n';
-    std::cout << " num_elem_blk " << nelem_blocks << '\n';
-    std::cout << " num_node_sets " << nnode_sets << '\n';
-    std::cout << " num_side_sets " << nside_sets << '\n';
+    std::ostringstream oss;
+    oss << "P" << mesh->comm()->rank() << ": init params for " << path << ":\n";
+    oss << " Exodus ID " << file << '\n';
+    oss << " comp_ws " << comp_ws << '\n';
+    oss << " io_ws " << io_ws << '\n';
+    oss << " Title " << title << '\n';
+    oss << " num_dim " << dim << '\n';
+    oss << " num_nodes " << mesh->nverts() << '\n';
+    oss << " num_elem " << mesh->nelems() << '\n';
+    oss << " num_elem_blk " << nelem_blocks << '\n';
+    oss << " num_node_sets " << nnode_sets << '\n';
+    oss << " num_side_sets " << nside_sets;
+    std::cout << oss.str() << std::endl;
   }
   CALL(ex_put_init(file, title, dim, mesh->nverts(), mesh->nelems(),
       nelem_blocks, nnode_sets, nside_sets));
@@ -611,7 +618,7 @@ void write(
     auto block_elems2elem = collect_marked(elems_in_block);
     auto nblock_elems = block_elems2elem.size();
     if (verbose) {
-      std::cout << "element block " << block_id << " has " << nblock_elems
+      std::cout << "P" << mesh->comm()->rank() <<  ": element block " << block_id << " has " << nblock_elems
                 << " of type " << type_name << '\n';
     }
     auto deg = element_degree(mesh->family(), dim, VERT);
@@ -637,7 +644,7 @@ void write(
         auto set_sides2side = collect_marked(sides_in_set);
         auto nset_sides = set_sides2side.size();
         if (verbose) {
-          std::cout << "side set " << set_id << " has " << nset_sides
+          std::cout << "P" << mesh->comm()->rank() << ": side set " << set_id << " has " << nset_sides
                     << " sides\n";
         }
         auto sides2elems = mesh->ask_up(dim - 1, dim);
@@ -666,7 +673,7 @@ void write(
         auto set_nodes2node_ex = add_to_each(set_nodes2node, 1);
         auto nset_nodes = set_nodes2node.size();
         if (verbose) {
-          std::cout << "node set " << set_id << " has " << nset_nodes
+          std::cout << "P" << mesh->comm()->rank() << ": node set " << set_id << " has " << nset_nodes
                     << " nodes\n";
         }
         auto h_set_nodes2node = HostRead<LO>(set_nodes2node_ex);
@@ -685,11 +692,11 @@ void write(
           if (surface_id == cp.id) {
             set_names[index] = name;
             if (verbose && (classify_with & exodus::NODE_SETS)) {
-              std::cout << "node set " << surface_id << " will be called \""
+              std::cout << "P" << mesh->comm()->rank() << ": node set " << surface_id << " will be called \""
                         << name << "\"\n";
             }
             if (verbose && (classify_with & exodus::SIDE_SETS)) {
-              std::cout << "side set " << surface_id << " will be called \""
+              std::cout << "P" << mesh->comm()->rank() << ": side set " << surface_id << " will be called \""
                         << name << "\"\n";
             }
           }

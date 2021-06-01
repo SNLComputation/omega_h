@@ -91,6 +91,10 @@ std::string const& Write<T>::name() const {
 template <typename T>
 void Write<T>::set(LO i, T value) const {
   ScopedTimer timer("single host to device");
+#ifdef OMEGA_H_CHECK_BOUNDS
+    OMEGA_H_CHECK(0 <= i);
+    OMEGA_H_CHECK(i < size());
+#endif
 #ifdef OMEGA_H_USE_CUDA
   cudaMemcpy(data() + i, &value, sizeof(T), cudaMemcpyHostToDevice);
 #else
@@ -101,6 +105,10 @@ void Write<T>::set(LO i, T value) const {
 template <typename T>
 T Write<T>::get(LO i) const {
   ScopedTimer timer("single device to host");
+#ifdef OMEGA_H_CHECK_BOUNDS
+    OMEGA_H_CHECK(0 <= i);
+    OMEGA_H_CHECK(i < size());
+#endif
 #ifdef OMEGA_H_USE_CUDA
   T value;
   cudaMemcpy(&value, data() + i, sizeof(T), cudaMemcpyDeviceToHost);
@@ -297,6 +305,10 @@ T* HostWrite<T>::data() const {
 
 template <typename T>
 void HostWrite<T>::set(LO i, T value) {
+#ifdef OMEGA_H_CHECK_BOUNDS
+    OMEGA_H_CHECK(0 <= i);
+    OMEGA_H_CHECK(i < size());
+#endif
 #ifdef OMEGA_H_USE_KOKKOS
   mirror_[i] = value;
 #elif defined(OMEGA_H_USE_CUDA)

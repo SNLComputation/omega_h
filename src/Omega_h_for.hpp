@@ -53,6 +53,7 @@ void for_each(InputIterator first, InputIterator last, UnaryFunction&& f) {
 
 template <typename UnaryFunction>
 void parallel_for(LO n, UnaryFunction&& f) {
+  OMEGA_H_TIME_FUNCTION;
   auto const first = IntIterator(0);
   auto const last = IntIterator(n);
   ::Omega_h::for_each(first, last, f);

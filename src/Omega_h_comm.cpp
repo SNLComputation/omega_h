@@ -255,22 +255,24 @@ T Comm::exscan(T x, Omega_h_Op op) const {
 }
 
 template <typename T>
-void Comm::bcast(T& x) const {
+void Comm::bcast(T& x, int root_rank) const {
 #ifdef OMEGA_H_USE_MPI
-  CALL(MPI_Bcast(&x, 1, MpiTraits<T>::datatype(), 0, impl_));
+  CALL(MPI_Bcast(&x, 1, MpiTraits<T>::datatype(), root_rank, impl_));
 #else
   (void)x;
+  (void)root_rank;
 #endif
 }
 
-void Comm::bcast_string(std::string& s) const {
+void Comm::bcast_string(std::string& s, int root_rank) const {
 #ifdef OMEGA_H_USE_MPI
   I32 len = static_cast<I32>(s.length());
   bcast(len);
   s.resize(static_cast<std::size_t>(len));
-  CALL(MPI_Bcast(&s[0], len, MPI_CHAR, 0, impl_));
+  CALL(MPI_Bcast(&s[0], len, MPI_CHAR, root_rank, impl_));
 #else
   (void)s;
+  (void)root_rank;
 #endif
 }
 
@@ -575,7 +577,7 @@ void Comm::barrier() const {
 #define INST(T)                                                                \
   template T Comm::allreduce(T x, Omega_h_Op op) const;                        \
   template T Comm::exscan(T x, Omega_h_Op op) const;                           \
-  template void Comm::bcast(T& x) const;                                       \
+  template void Comm::bcast(T& x, int root_rank) const;                        \
   template Read<T> Comm::allgather(T x) const;                                 \
   template Read<T> Comm::alltoall(Read<T> x) const;                            \
   template Read<T> Comm::alltoallv(                                            \

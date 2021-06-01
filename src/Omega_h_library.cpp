@@ -3,6 +3,7 @@
 #include <Omega_h_library.hpp>
 #include <Omega_h_malloc.hpp>
 #include <Omega_h_profile.hpp>
+#include <Omega_h_dbg.hpp>
 
 #include <csignal>
 #include <cstdarg>
@@ -10,6 +11,11 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+
+#ifdef OMEGA_H_DBG
+Omega_h::Comm *DBG_COMM = 0;
+bool dbg_print_global = false;
+#endif
 
 namespace Omega_h {
 
@@ -61,6 +67,11 @@ void Library::initialize(char const* head_desc, int* argc, char*** argv
     std::string msg_str = msg.str();
     Omega_h::fail("%s\n", msg_str.c_str());
   }
+  OMEGA_H_CHECK(argc != nullptr);
+  OMEGA_H_CHECK(argv != nullptr);
+  for (int ic = 0; ic < *argc; ic++) {
+    argv_.push_back((*argv)[ic]);
+  }
 #ifdef OMEGA_H_USE_MPI
   int mpi_is_init;
   OMEGA_H_CHECK(MPI_SUCCESS == MPI_Initialized(&mpi_is_init));
@@ -73,6 +84,11 @@ void Library::initialize(char const* head_desc, int* argc, char*** argv
   MPI_Comm world_dup;
   MPI_Comm_dup(comm_mpi, &world_dup);
   world_ = CommPtr(new Comm(this, world_dup));
+
+#ifdef OMEGA_H_DBG
+  DBG_COMM = world_.get();
+#endif
+
 #else
   world_ = CommPtr(new Comm(this, false, false));
   self_ = CommPtr(new Comm(this, false, false));
@@ -82,6 +98,13 @@ void Library::initialize(char const* head_desc, int* argc, char*** argv
       "--osh-memory", "print amount and stacktrace of max memory use");
   cmdline.add_flag(
       "--osh-time", "print amount of time spend in certain functions");
+  cmdline.add_flag(
+      "--osh-time-percent", "print amount of time spend in certain functions by percentage");
+  auto& osh_time_chop_flag = cmdline.add_flag(
+      "--osh-time-chop", "only print functions whose percent time is greater than given value (e.g. --osh-time-chop=2)");
+  osh_time_chop_flag.add_arg<double>("0.0");
+  cmdline.add_flag("--osh-time-with-filename", "add file name to function name in profile output");
+
   cmdline.add_flag("--osh-signal", "catch signals and print a stacktrace");
   cmdline.add_flag("--osh-fpe", "enable floating-point exceptions");
   cmdline.add_flag("--osh-silent", "suppress all output");
@@ -95,9 +118,18 @@ void Library::initialize(char const* head_desc, int* argc, char*** argv
   if (argc && argv) {
     OMEGA_H_CHECK(cmdline.parse(world_, argc, *argv));
   }
+  bool add_filename = false;
+  if (cmdline.parsed("--osh-time-with-filename")) {
+    add_filename = true;
+  }
+  double chop = cmdline.get<double>("--osh-time-chop", "0.0");
   if (cmdline.parsed("--osh-time")) {
     Omega_h::profile::global_singleton_history =
-        new Omega_h::profile::History();
+      new Omega_h::profile::History(world_, false, chop, add_filename);
+  }
+  if (cmdline.parsed("--osh-time-percent")) {
+    Omega_h::profile::global_singleton_history =
+      new Omega_h::profile::History(world_, true, chop, add_filename);
   }
   if (cmdline.parsed("--osh-fpe")) {
     enable_floating_point_exceptions();
@@ -128,8 +160,9 @@ void Library::initialize(char const* head_desc, int* argc, char*** argv
     int local_mpi_rank = rank % mpi_ranks_per_node;
     cudaSetDevice(local_mpi_rank);
     cudaGetDevice(&my_device);
-    OMEGA_H_CHECK(mpi_ranks_per_node == ndevices_per_node);
-    OMEGA_H_CHECK(my_device == local_mpi_rank);
+    PCOUT("ndevices_per_node= " << ndevices_per_node << " mpi_ranks_per_node= " << mpi_ranks_per_node << " local_mpi_rank= " << local_mpi_rank << std::endl);
+    OMEGA_H_CHECK_OP(mpi_ranks_per_node, ==, ndevices_per_node);
+    OMEGA_H_CHECK_OP(my_device, ==, local_mpi_rank);
   }
 #endif
   if (cmdline.parsed("--osh-signal")) Omega_h::protect();
@@ -157,10 +190,14 @@ Library::Library(Library const& other)
 
 Library::~Library() {
   if (Omega_h::profile::global_singleton_history) {
+    double total_runtime = now() - Omega_h::profile::global_singleton_history->start_time;
     if (world_->rank() == 0) {
+      // FIXME - parallelize?
       Omega_h::profile::print_top_down_and_bottom_up(
-          *Omega_h::profile::global_singleton_history);
+          *Omega_h::profile::global_singleton_history, total_runtime);
     }
+    Omega_h::profile::print_top_sorted(
+          *Omega_h::profile::global_singleton_history, total_runtime);
     delete Omega_h::profile::global_singleton_history;
     Omega_h::profile::global_singleton_history = nullptr;
   }

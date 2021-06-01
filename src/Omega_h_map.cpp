@@ -26,7 +26,7 @@ template <typename T>
 void map_into(Read<T> a_data, LOs a2b, Write<T> b_data, Int width) {
   OMEGA_H_TIME_FUNCTION;
   auto na = a2b.size();
-  OMEGA_H_CHECK(a_data.size() == na * width);
+  OMEGA_H_CHECK_MSG(a_data.size() == na * width, "a_data.size= " << a_data.size() << " na= " << na << " width= " << width);
   auto f = OMEGA_H_LAMBDA(LO a) {
     auto b = a2b[a];
     for (Int j = 0; j < width; ++j) {
@@ -57,9 +57,16 @@ void map_into_range(
   parallel_for(na, f, "map_into_range");
 }
 
+/* map_onto: small array to large:
+     a= {10,20} map={0,2}, b={0,0,0}, nb=3, map.len()==a.len(), 
+     loop ia=0,1; b[m[ia]] = a[ia];
+   unmap: copies from large to small:
+     loop ia=0,1; a[ia] = b[m[ia]]
+*/
 template <typename T>
 Read<T> map_onto(Read<T> a_data, LOs a2b, LO nb, T init_val, Int width) {
   auto out = Write<T>(nb * width, init_val);
+  OMEGA_H_CHECK_OP(out.size(), >=, a_data.size());
   map_into(a_data, a2b, out, width);
   return out;
 }

@@ -3,6 +3,7 @@
 #include <Omega_h_file.hpp>
 #include <Omega_h_library.hpp>
 #include <Omega_h_mesh.hpp>
+#include <Omega_h_dbg.hpp>
 
 int main(int argc, char** argv) {
   auto lib = Omega_h::Library(&argc, &argv);
@@ -13,8 +14,13 @@ int main(int argc, char** argv) {
   auto target_error = Omega_h::Real(0.011);
   auto gradation_rate = Omega_h::Real(1.0);
   auto max_metric_length = Omega_h::Real(2.8);
+  TRACK0(lib.world()->size());
   Omega_h::binary::read(inpath, lib.world(), &mesh);
+  std::string mstr = mesh.string();
+  PCOUT("read: " << mstr << std::endl);
   mesh.balance();
+  mstr = mesh.string();
+  PCOUT("balance: " << mstr << std::endl);
   mesh.set_parting(OMEGA_H_GHOSTED);
   auto genopts = Omega_h::MetricInput();
   genopts.sources.push_back(

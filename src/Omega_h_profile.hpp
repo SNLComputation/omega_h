@@ -2,13 +2,19 @@
 #define OMEGA_H_STACK_HPP
 
 #include <Omega_h_timer.hpp>
+#include <Omega_h_filesystem.hpp>
 #include <cstring>
 #include <vector>
+#include <memory>
 #ifdef OMEGA_H_USE_KOKKOS
 #include <Omega_h_kokkos.hpp>
 #endif
 
 namespace Omega_h {
+
+class Comm;
+typedef std::shared_ptr<Comm> CommPtr;
+
 namespace profile {
 
 struct Strings {
@@ -43,7 +49,13 @@ struct History {
   std::size_t current_frame;
   std::size_t last_root;
   Strings names;
-  History();
+  Now start_time;
+  bool do_percent;
+  double chop;
+  bool add_filename;
+  CommPtr comm;
+  History(CommPtr comm = nullptr, bool dopercent=false, double chop=0.0, bool add_filename=false);
+  History(const History& h);
   inline const char* get_name(std::size_t frame) const {
     return names.get(frames[frame].name_ptr);
   }
@@ -162,19 +174,28 @@ OMEGA_H_DLL extern History* global_singleton_history;
 void simple_print(profile::History const& history);
 History invert(History const& h);
 void print_time_sorted(History const& h);
-void print_top_down_and_bottom_up(History const& h);
+void print_top_down_and_bottom_up(History const& h, double total_runtime);
+void print_top_sorted(History const& h, double total_runtime);
 
 }  // namespace profile
 }  // namespace Omega_h
 
 namespace Omega_h {
 
-inline void begin_code(char const* name) {
+inline void begin_code(char const* name, char const* file=0) {
 #ifdef OMEGA_H_USE_KOKKOS
   Kokkos::Profiling::pushRegion(name);
 #endif
   if (profile::global_singleton_history) {
-    profile::global_singleton_history->start(name);
+    if (file == 0) {
+      file = "Omega_h";
+    }
+    if (profile::global_singleton_history->add_filename) {
+      std::string str = ::Omega_h::filesystem::path(file).filename().string()+"::"+std::string(name);
+      profile::global_singleton_history->start(str.c_str());
+    } else {
+      profile::global_singleton_history->start(name);
+    }
   }
 }
 
@@ -196,7 +217,7 @@ inline void end_code() {
 }
 
 struct ScopedTimer {
-  ScopedTimer(char const* name) { begin_code(name); }
+  ScopedTimer(char const* name, char const *file=0) { begin_code(name, file); }
   ~ScopedTimer() { end_code(); }
   ScopedTimer(ScopedTimer const&) = delete;
   ScopedTimer(ScopedTimer&&) = delete;
@@ -208,6 +229,6 @@ struct ScopedTimer {
 }  // namespace Omega_h
 
 #define OMEGA_H_TIME_FUNCTION                                                  \
-  ::Omega_h::ScopedTimer omega_h_scoped_function_timer(__FUNCTION__)
+  ::Omega_h::ScopedTimer omega_h_scoped_function_timer(__FUNCTION__, __FILE__)
 
 #endif

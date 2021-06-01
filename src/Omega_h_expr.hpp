@@ -24,6 +24,7 @@ struct ExprEnv {
   std::map<std::string, Function> functions;
   LO size;
   Int dim;
+  std::string string(int verbose=0);
 };
 
 struct ExprOp {

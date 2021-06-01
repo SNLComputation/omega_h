@@ -21,9 +21,15 @@ std::ostream& operator<<(std::ostream& stream, Read<T> r) {
   return stream << HostRead<T>(r);
 }
 
+template <class T>
+std::ostream& operator<<(std::ostream& stream, Write<T> r) {
+  return stream << Omega_h::read(r);
+}
+
 #define OMEGA_H_EXPL_INST(T)                                                   \
   template std::ostream& operator<<(std::ostream&, HostRead<T>);               \
-  template std::ostream& operator<<(std::ostream&, Read<T>);
+  template std::ostream& operator<<(std::ostream&, Read<T>);                   \
+  template std::ostream& operator<<(std::ostream&, Write<T>);
 OMEGA_H_EXPL_INST(I8)
 OMEGA_H_EXPL_INST(I32)
 OMEGA_H_EXPL_INST(I64)

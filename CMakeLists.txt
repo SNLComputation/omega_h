@@ -26,6 +26,16 @@ bob_input(Omega_h_VALGRIND "" STRING "Valgrind plus arguments for testing")
 bob_option(Omega_h_EXAMPLES "Compile examples" OFF)
 
 bob_option(Omega_h_USE_MPI "Use MPI for parallelism" OFF)
+bob_option(Omega_h_ENABLE_DEMANGLED_STACKTRACE "Add linker options to enable human-readable stacktraces on gnu-c platforms." OFF)
+bob_option(Omega_h_DBG "Enable debug prints, stacktraces, etc." OFF)
+
+if (Omega_h_ENABLE_DEMANGLED_STACKTRACE)
+  message(STATUS "CMAKE_BUILD_TYPE= ${CMAKE_BUILD_TYPE}")
+  if ((CMAKE_BUILD_TYPE STREQUAL "Debug") OR (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
+    message(STATUS "Omega_h adding -rdynamic to CMAKE_EXE_LINKER_FLAGS= ${CMAKE_EXE_LINKER_FLAGS}")
+  endif()
+endif()
 
 if (Omega_h_USE_MPI)
   enable_language(C)
@@ -94,6 +104,8 @@ set(Omega_h_IS_SHARED ${BUILD_SHARED_LIBS})
 
 set(Omega_h_KEY_BOOLS
     Omega_h_USE_MPI
+    Omega_h_ENABLE_DEMANGLED_STACKTRACE
+    Omega_h_DBG
     Omega_h_USE_Kokkos
     Omega_h_USE_OpenMP
     Omega_h_USE_CUDA
@@ -147,5 +159,6 @@ if (Omega_h_USE_CUDA)
       ${CMAKE_CURRENT_SOURCE_DIR}/bin/nvcc_wrapper
       DESTINATION bin)
 endif()
+
 
 bob_end_package()

@@ -6,6 +6,9 @@
 #include <Omega_h_math_lang.hpp>
 #include <Omega_h_matrix.hpp>
 #include <Omega_h_vector.hpp>
+#include <Omega_h_dbg.hpp>
+
+#include <sstream>
 
 namespace Omega_h {
 
@@ -1129,6 +1132,27 @@ any ExprOpsReader::at_reduce(int prod, std::vector<any>& rhs) {
     }
   }
   return any();
+}
+
+std::string ExprEnv::string(int verbose) {
+  //std::map<std::string, any> variables;
+  //std::map<std::string, Function> functions;
+  //LO size;
+  //Int dim;
+  std::ostringstream oss, vs;
+  std::string sep = "";
+  for(auto i : variables) {
+    auto v = i.second;
+    std::string str = any_cast<std::string>(v);
+    vs << sep << "{" << i.first << " : " << str << "}";
+    sep = " ";
+  }
+  oss << "ExprEnv:"
+      << "\n  size      = " << size
+      << "\n  dim       = " << dim
+      << "\n  variables = " << vs.str();
+  (void)verbose;
+  return oss.str();
 }
 
 #undef OMEGA_H_BINARY_REDUCE

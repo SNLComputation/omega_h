@@ -37,6 +37,7 @@ class Library {
   LO self_send_threshold() const;
   LO self_send_threshold_;
   bool silent_;
+  std::vector<std::string> argv_;
 
  private:
   void initialize(char const* head_desc, int* argc, char*** argv
