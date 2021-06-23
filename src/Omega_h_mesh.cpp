@@ -582,6 +582,29 @@ void Mesh::balance(bool predictive) {
   migrate_mesh(this, sorted_new2owners, OMEGA_H_ELEM_BASED, false);
 }
 
+void Mesh::balance(Reals weight) {
+  OMEGA_H_TIME_FUNCTION;
+  if (comm_->size() == 1) return;
+  set_parting(OMEGA_H_ELEM_BASED);
+  inertia::Rib hints;
+  if (rib_hints_) hints = *rib_hints_;
+  auto ecoords =
+      average_field(this, dim(), LOs(nelems(), 0, 1), dim(), coords());
+  if (dim() < 3) ecoords = resize_vectors(ecoords, dim(), 3);
+  Real abs_tol;
+  abs_tol = max2(0.0, get_max(comm_, weight));
+  abs_tol *= 2.0;  // fudge factor ?
+  auto owners = ask_owners(dim());
+  recursively_bisect(comm(), abs_tol, &ecoords, &weight, &owners, &hints);
+  rib_hints_ = std::make_shared<inertia::Rib>(hints);
+  auto unsorted_new2owners = Dist(comm_, owners, nelems());
+  auto owners2new = unsorted_new2owners.invert();
+  auto owner_globals = this->globals(dim());
+  owners2new.set_dest_globals(owner_globals);
+  auto sorted_new2owners = owners2new.invert();
+  migrate_mesh(this, sorted_new2owners, OMEGA_H_ELEM_BASED, false);
+}
+
 Graph Mesh::ask_graph(Int from, Int to) {
   if (to > from) {
     return ask_up(from, to);
